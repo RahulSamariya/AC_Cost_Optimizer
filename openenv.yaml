@@ -1,0 +1,42 @@
+name: cool-budget-ai
+version: 1.0.0
+description: "HVAC control environment for benchmarking thermal comfort and energy efficiency."
+
+observation_space:
+  type: box
+  shape: [6]
+  low: [0.0, 0.0, 0.0, 15.0, 0.0, 0.0]
+  high: [50.0, 1.0, 1.0, 45.0, 5.0, 144.0]
+  labels: ["ambient_temp", "server_load", "fan_speed", "cpu_temp", "energy_consumed", "time_step"]
+
+action_space:
+  type: discrete
+  n: 4
+  labels: ["OFF", "FAN", "ECO", "TURBO"]
+
+tasks:
+  - id: easy
+    description: "Flat pricing, fixed occupancy. Best for initial training."
+    pricing_mode: flat
+    occupancy_mode: fixed
+  - id: medium
+    description: "Time-of-Use pricing, office occupancy. Requires basic peak shifting."
+    pricing_mode: tou
+    occupancy_mode: office
+  - id: hard
+    description: "Dynamic pricing, variable occupancy. Highly stochastic environment."
+    pricing_mode: dynamic
+    occupancy_mode: variable
+
+endpoints:
+  reset: /reset
+  step: /step
+  state: /state
+  health: /health
+
+reward:
+  definition: "reward = (comfort * W_COMFORT) - (real_cost * LAMBDA_COST) - discomfort_penalty"
+  components:
+    comfort: "ASHRAE-55 adaptive comfort score [0,1]"
+    cost: "Real-time energy cost in USD"
+    discomfort: "Penalty for temperature deviation weighted by occupancy"
