@@ -7,7 +7,7 @@ from cool_budget_ai.graders.grader import grade_episode
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a baseline agent on the Cool Budget AI environment.")
-    parser.add_argument("--task", type=str, default="easy", choices=["easy", "hard"],
+    parser.add_argument("--task", type=str, default="easy", choices=["easy", "medium", "hard"],
                         help="The task difficulty level (default: easy)")
     parser.add_argument("--render", action="store_true", help="Render the environment steps")
     args = parser.parse_args()

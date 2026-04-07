@@ -1,0 +1,12 @@
+version: "1.0.0"
+name: "support_ticket_routing"
+entry_points:
+  env: "env:SupportTicketEnv"
+  tasks: "tasks"
+schemas:
+  observation: "models:Observation"
+  action: "models:Action"
+metadata:
+  difficulty_levels: ["Easy", "Medium", "Hard"]
+  domain: "Customer Operations"
+  rl_type: "Discrete POMDP"

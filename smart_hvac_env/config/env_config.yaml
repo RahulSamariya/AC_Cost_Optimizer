@@ -1,0 +1,73 @@
+metadata:
+  name: "SmartHVACEnv"
+  version: "1.0.0"
+  description: "ASHRAE-55 compliant RL environment for smart building thermal control."
+  author: "Gemini CLI RL Expert"
+  gym_id: "SmartHVACEnv-v1"
+  timestep_seconds: 300
+  episode_steps: 288
+
+observation_space:
+  type: Box
+  shape: [15]
+  dtype: float32
+  features:
+    - {id: 0, name: indoor_temperature, range: [15, 40], norm: linear, desc: "Current air temperature"}
+    - {id: 1, name: outdoor_temperature, range: [-10, 45], norm: linear, desc: "Outside ambient temperature"}
+    - {id: 2, name: humidity, range: [10, 90], norm: linear, desc: "Relative humidity (%)"}
+    - {id: 3, name: occupancy, range: [0, 2], norm: "/2", desc: "0=Empty, 1=Sitting, 2=Active"}
+    - {id: 4, name: fan_speed, range: [0, 4], norm: "/4", desc: "0=OFF to 4=TURBO"}
+    - {id: 5, name: current_energy_price, range: [0.05, 0.50], norm: linear, desc: "USD/kWh"}
+    - {id: 6, name: next_hour_price, range: [0.05, 0.50], norm: linear, desc: "USD/kWh forecast"}
+    - {id: 7, name: price_delta, range: [-0.45, 0.45], norm: "+0.45 / 0.90", desc: "Forecast trend"}
+    - {id: 8, name: pmv, range: [-3, 3], norm: "+3 / 6", desc: "Thermal sensation (-3 to +3)"}
+    - {id: 9, name: ppd, range: [5, 100], norm: "/100", desc: "Dissatisfied %"}
+    - {id: 10, name: thermal_mass_temp, range: [15, 40], norm: linear, desc: "Walls/Furniture temp"}
+    - {id: 11, name: solar_gain, range: [0, 500], norm: "/500", desc: "Watts from sun"}
+    - {id: 12, name: ventilation_state, range: [0, 2], norm: "/2", desc: "0=Low, 1=Med, 2=High"}
+    - {id: 13, name: window_state, range: [0, 1], norm: as-is, desc: "0=Closed, 1=Open"}
+    - {id: 14, name: peak_price_soon, range: [0, 1], norm: binary, desc: "1 if peak coming in 2h"}
+
+action_space:
+  type: Discrete
+  n: 14
+  actions:
+    0: {name: "Nothing", desc: "Maintain current state"}
+    1: {name: "Lower Setpoint", desc: "-1C to target", energy_impact: "high"}
+    2: {name: "Raise Setpoint", desc: "+1C to target", energy_impact: "low"}
+    3: {name: "Fan Low", desc: "Set speed 1", energy_impact: "low"}
+    4: {name: "Fan Med", desc: "Set speed 2", energy_impact: "medium"}
+    5: {name: "Fan High", desc: "Set speed 3", energy_impact: "medium-high"}
+    6: {name: "Turbo ON", desc: "Max cooling + Fan 4", energy_impact: "max"}
+    7: {name: "Turbo OFF", desc: "Return to normal", energy_impact: "variable"}
+    8: {name: "ECO ON", desc: "Higher COP efficiency", energy_impact: "optimal"}
+    9: {name: "ECO OFF", desc: "Standard mode", energy_impact: "standard"}
+    10: {name: "Open Window", desc: "Natural cooling/heating", energy_impact: "passive"}
+    11: {name: "Close Window", desc: "Seal environment", energy_impact: "passive"}
+    12: {name: "Inc Vent", desc: "More fresh air", energy_impact: "medium"}
+    13: {name: "Dec Vent", desc: "Recirculate air", energy_impact: "low"}
+
+reward:
+  formula: "comfort_reward - energy_penalty - instability_penalty"
+  components:
+    comfort_reward: "PMV reward (1.0 for +/- 0.5) + PPD penalty (-0.01 per point above 5%)"
+    energy_penalty: "Sum of HVAC power (0.001*W), Fan, Turbo, Vent, Window weights * Price Multiplier"
+    instability_penalty: "0.1 per changed action dimension"
+  pre_cooling_bonus: "+0.3 if price spike expected and temp is low"
+
+pricing:
+  type: "time_of_use"
+  schedule:
+    - {hours: "00-07", rate: 0.08, label: "Off-Peak"}
+    - {hours: "07-17", rate: 0.15, label: "Mid-Peak"}
+    - {hours: "17-22", rate: 0.35, label: "On-Peak"}
+    - {hours: "22-24", rate: 0.10, label: "Off-Peak"}
+  domain_randomization: "+/- 20% per episode"
+
+thermal_model:
+  type: "two_node_RC"
+  dt_seconds: 300
+  scenarios:
+    room: {C_air: 60000, C_mass: 80000000}
+    office: {C_air: 120000, C_mass: 160000000}
+    server_room: {occupancy: 0, internal_load: 5000}
