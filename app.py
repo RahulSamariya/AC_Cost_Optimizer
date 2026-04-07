@@ -1,50 +1,54 @@
+import logging
+import threading
+from typing import Optional
 from fastapi import FastAPI, Body, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-from cool_budget_ai.tasks.task_configs import make_env, TASK_REGISTRY
-from cool_budget_ai.env.thermal_env import ThermalEnv, StepResult
+from fastapi.middleware.cors import CORSMiddleware
+from core.state_manager import state_manager
+from tasks.generator import generate_tickets
+from models.action import Action
+from models.state import State
+from graders.grader import grade_episode
 
-app = FastAPI()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Global environment instance (default to hard)
-env = make_env("hard")
+app = FastAPI(title="OpenEnv Multi-Agent Triage Server")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-class ResetRequest(BaseModel):
-    task: Optional[str] = "hard"
-    seed: Optional[int] = 42
-
-class StepRequest(BaseModel):
-    action: int
+@app.on_event("startup")
+async def startup_event():
+    logger.info("OpenEnv Ticket Triage Server ready on port 7860")
 
 @app.post("/reset")
-async def reset(request: ResetRequest = Body(...)):
-    global env
-    if request.task.lower() in TASK_REGISTRY:
-        env = make_env(request.task.lower())
-    else:
-        raise HTTPException(status_code=400, detail=f"Invalid task: {request.task}")
+async def reset(episode_id: str = Body(...), difficulty: Optional[str] = Body(None)):
+    # Create tickets based on difficulty
+    num_tickets = 5 if difficulty == "easy" else 10
+    tickets = generate_tickets(num_tickets, difficulty)
     
-    # reset returns StepResult
-    result = env.reset(seed=request.seed)
-    # We return the whole StepResult as JSON
-    return result
+    env = state_manager.create_env(episode_id, tickets)
+    return env.reset()
 
 @app.post("/step")
-async def step(request: StepRequest = Body(...)):
-    # step returns StepResult
-    result = env.step(request.action)
-    return result
+async def step(episode_id: str = Body(...), action: Action = Body(...)):
+    env = state_manager.get_env(episode_id)
+    return env.step(action)
 
 @app.get("/state")
-async def get_state():
-    return env.state()
+async def get_state(episode_id: str):
+    env = state_manager.get_env(episode_id)
+    return State(
+        current_index=env.current_index,
+        tickets=env.tickets,
+        total_reward=env.total_reward,
+        step_count=env.step_count,
+        done=env.done,
+        episode_id=env.episode_id
+    )
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-if __name__ == "__main__":
-    import uvicorn
-    # Default port for app.py is 8000 in this file, 
-    # but Docker uses 7860. Uvicorn will respect port arg.
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.get("/trajectory")
+async def get_trajectory(episode_id: str):
+    env = state_manager.get_env(episode_id)
+    return {
+        "trajectory": env.trajectory,
+        "report": grade_episode(env.trajectory)
+    }

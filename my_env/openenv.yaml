@@ -1,0 +1,13 @@
+version: "1.0.0"
+name: "support_ticket_routing"
+image: "support-ticket-env:latest"
+entry_points:
+  client: "client:TicketEnvClient"
+  server: "server.app:app"
+schemas:
+  observation: "models:Observation"
+  action: "models:Action"
+metadata:
+  difficulty_levels: ["Easy", "Medium", "Hard"]
+  domain: "Customer Support"
+  rl_type: "Discrete POMDP"
